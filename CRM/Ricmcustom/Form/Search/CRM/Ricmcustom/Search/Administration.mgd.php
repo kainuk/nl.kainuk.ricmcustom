@@ -12,7 +12,7 @@ return array (
     array (
       'version' => 3,
       'label' => 'CRM_Ricmcustom_Search_Administration',
-      'description' => 'CRM_Ricmcustom_Search_Administration (nl.kainuk.ricmcustom)',
+      'description' => 'Custom Search for the RICM Administrators',
       'class_name' => 'CRM_Ricmcustom_Form_Search_CRM_Ricmcustom_Search_Administration',
     ),
   ),

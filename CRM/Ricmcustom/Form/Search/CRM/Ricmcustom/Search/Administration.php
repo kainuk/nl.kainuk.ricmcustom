@@ -4,178 +4,227 @@
  * A custom contact search
  */
 class CRM_Ricmcustom_Form_Search_CRM_Ricmcustom_Search_Administration extends CRM_Contact_Form_Search_Custom_Base implements CRM_Contact_Form_Search_Interface {
-  function __construct(&$formValues) {
+
+  protected $_aclFrom = NULL;
+  protected $_aclWhere = NULL;
+  /**
+   * @param $formValues
+   */
+  public function __construct(&$formValues) {
     parent::__construct($formValues);
+
+    $this->_columns = array(
+      ts('Contact ID') => 'contact_id',
+      ts('Name') => 'sort_name',
+      ts('Status') => 'status_id',
+      ts('Remarks') => 'opmerkingen',
+      ts('Language') => 'language',
+      ts('Applied for Team') => 'aanmelding_team',
+    );
   }
 
   /**
-   * Prepare a set of search fields
-   *
-   * @param CRM_Core_Form $form modifiable
-   * @return void
+   * @param CRM_Core_Form $form
    */
-  function buildForm(&$form) {
-    CRM_Utils_System::setTitle(ts('My Search Title'));
+  public function buildForm(&$form) {
 
-    $form->add('text',
-      'household_name',
-      ts('Household Name'),
-      TRUE
-    );
+    $events = CRM_Event_BAO_Event::getEvents(1);
+    $roles  = CRM_Event_PseudoConstant::participantRole();
+    $status = CRM_Event_PseudoConstant::participantStatus(null,"name in ('Registered','Awaiting approval','Partially paid','Pending refund','Pending from pay later')");
+    $form->add('text', 'contact_id', ts('RICM-2017 identifier'));
+    $form->add('select', 'event_id', ts('Event Name'), array('' => ts('- select -')) + $events);
+    $form->add('select', 'role_id', ts('Participant Role'), array('' => ts('- select -')) + $roles);
+    $form->add('select', 'status_id', ts('Status'), array('' => ts('- select -')) + $status);
+    $form->add('select', 'language', ts('Language'), array('' => ts('- select -'),'nl'=>'Dutch','en'=>'English'));
+    $form->add('select', 'team', ts('Applied for Team'), array('' => ts('- select -'),'1'=>'Yes','0'=>'No'));
 
-    $stateProvince = array('' => ts('- any state/province -')) + CRM_Core_PseudoConstant::stateProvince();
-    $form->addElement('select', 'state_province_id', ts('State/Province'), $stateProvince);
-
-    // Optionally define default search values
-    $form->setDefaults(array(
-      'household_name' => '',
-      'state_province_id' => NULL,
-    ));
+    /**
+     * You can define a custom title for the search form
+     */
+    $this->setTitle('RICM Administratie');
 
     /**
      * if you are using the standard template, this array tells the template what elements
      * are part of the search criteria
      */
-    $form->assign('elements', array('household_name', 'state_province_id'));
+    $form->assign('elements', array('contact_id','event_id','role_id','status_id','language','team'));
   }
 
   /**
-   * Get a list of summary data points
-   *
-   * @return mixed; NULL or array with keys:
-   *  - summary: string
-   *  - total: numeric
+   * @return array
    */
-  function summary() {
-    return NULL;
-    // return array(
-    //   'summary' => 'This is a summary',
-    //   'total' => 50.0,
-    // );
-  }
-
-  /**
-   * Get a list of displayable columns
-   *
-   * @return array, keys are printable column headers and values are SQL column names
-   */
-  function &columns() {
-    // return by reference
-    $columns = array(
-      ts('Contact Id') => 'contact_id',
-      ts('Contact Type') => 'contact_type',
-      ts('Name') => 'sort_name',
-      ts('State') => 'state_province',
+  public function summary() {
+    $summary = array(
     );
-    return $columns;
+    return $summary;
   }
 
   /**
-   * Construct a full SQL query which returns one page worth of results
+   * @param int $offset
+   * @param int $rowcount
+   * @param null $sort
+   * @param bool $returnSQL
    *
+   * @return string
+   */
+  public function contactIDs($offset = 0, $rowcount = 0, $sort = NULL, $returnSQL = FALSE) {
+    return $this->all($offset, $rowcount, $sort, FALSE, TRUE);
+  }
+
+  /**
    * @param int $offset
    * @param int $rowcount
    * @param null $sort
    * @param bool $includeContactIDs
    * @param bool $justIDs
-   * @return string, sql
+   *
+   * @return string
    */
-  function all($offset = 0, $rowcount = 0, $sort = NULL, $includeContactIDs = FALSE, $justIDs = FALSE) {
-    // delegate to $this->sql(), $this->select(), $this->from(), $this->where(), etc.
-    return $this->sql($this->select(), $offset, $rowcount, $sort, $includeContactIDs, NULL);
+  public function all($offset = 0, $rowcount = 0, $sort = NULL, $includeContactIDs = FALSE, $justIDs = FALSE) {
+    if ($justIDs) {
+      $selectClause = "contact_a.id as contact_id";
+      $sort = 'contact_a.id';
+    }
+    else {
+      $selectClause = "
+contact_a.id      as contact_id,
+display_name      as display_name,
+sort_name         as sort_name,
+language_5        as language,
+participant.status_id         as status_id,
+participant.id    as participant_id,
+aanmelding_team_7 as aanmelding_team,
+opmerkingen_8     as opmerkingen
+";
+    }
+
+    return $this->sql($selectClause,
+      $offset, $rowcount, $sort,
+      $includeContactIDs, NULL
+    );
   }
 
   /**
-   * Construct a SQL SELECT clause
-   *
-   * @return string, sql fragment with SELECT arguments
+   * @return string
    */
-  function select() {
-    return "
-      contact_a.id           as contact_id  ,
-      contact_a.contact_type as contact_type,
-      contact_a.sort_name    as sort_name,
-      state_province.name    as state_province
-    ";
+  public function from() {
+    $this->buildACLClause('contact_a');
+    $from = "
+FROM        civicrm_contact contact_a
+INNER JOIN  civicrm_participant participant on (contact_a.id = participant.contact_id)
+LEFT  JOIN  civicrm_value_ricm_participant_2 ricm on (participant.id = ricm.entity_id)
+{$this->_aclFrom}
+";
+    return $from;
   }
 
   /**
-   * Construct a SQL FROM clause
-   *
-   * @return string, sql fragment with FROM and JOIN clauses
-   */
-  function from() {
-    return "
-      FROM      civicrm_contact contact_a
-      LEFT JOIN civicrm_address address ON ( address.contact_id       = contact_a.id AND
-                                             address.is_primary       = 1 )
-      LEFT JOIN civicrm_email           ON ( civicrm_email.contact_id = contact_a.id AND
-                                             civicrm_email.is_primary = 1 )
-      LEFT JOIN civicrm_state_province state_province ON state_province.id = address.state_province_id
-    ";
-  }
-
-  /**
-   * Construct a SQL WHERE clause
-   *
    * @param bool $includeContactIDs
-   * @return string, sql fragment with conditional expressions
+   *
+   * @return string
    */
-  function where($includeContactIDs = FALSE) {
+  public function where($includeContactIDs = FALSE) {
     $params = array();
-    $where = "contact_a.contact_type   = 'Household'";
+    $where = "(1=1)";
 
-    $count  = 1;
-    $clause = array();
-    $name   = CRM_Utils_Array::value('household_name',
+    $contact_id = CRM_Utils_Array::value('contact_id',
       $this->_formValues
     );
-    if ($name != NULL) {
-      if (strpos($name, '%') === FALSE) {
-        $name = "%{$name}%";
-      }
-      $params[$count] = array($name, 'String');
-      $clause[] = "contact_a.household_name LIKE %{$count}";
-      $count++;
+
+    if ($contact_id) {
+      $where = "contact_a.id = $contact_id";
     }
 
-    $state = CRM_Utils_Array::value('state_province_id',
+    $event_id = CRM_Utils_Array::value('event_id',
       $this->_formValues
     );
-    if (!$state &&
-      $this->_stateID
-    ) {
-      $state = $this->_stateID;
+
+    if ($event_id) {
+      $where .= " AND participant.event_id = $event_id";
     }
 
-    if ($state) {
-      $params[$count] = array($state, 'Integer');
-      $clause[] = "state_province.id = %{$count}";
+    $role_id = CRM_Utils_Array::value('role_id',
+      $this->_formValues
+    );
+
+    if ($role_id) {
+      $where .= " AND participant.role_id = $role_id";
     }
 
-    if (!empty($clause)) {
-      $where .= ' AND ' . implode(' AND ', $clause);
+    $status_id = CRM_Utils_Array::value('status_id',
+      $this->_formValues
+    );
+
+    if ($status_id) {
+      $where .= " AND participant.status_id = $status_id";
+    }
+
+    $language =  CRM_Utils_Array::value('language',
+      $this->_formValues
+    );
+
+    if ($language) {
+      $where .= " AND ricm.language_5 = '$language'";
+    }
+
+    $team =  CRM_Utils_Array::value('team',
+      $this->_formValues
+    );
+
+    if ($team) {
+      $where .= " AND aanmelding_team_7 = '$team'";
     }
 
     return $this->whereClause($where, $params);
   }
 
   /**
-   * Determine the Smarty template for the search screen
-   *
-   * @return string, template path (findable through Smarty template path)
+   * @return string
    */
-  function templateFile() {
+  public function templateFile() {
     return 'CRM/Contact/Form/Search/Custom.tpl';
   }
 
   /**
-   * Modify the content of each row
-   *
-   * @param array $row modifiable SQL result row
-   * @return void
+   * @return array
    */
-  function alterRow(&$row) {
-    $row['sort_name'] .= ' ( altered )';
+  public function setDefaultValues() {
+    return array(
+      'event_id' => variable_get('ricm_event_id', '2'),
+    );
   }
+
+  /**
+   * @param $row
+   */
+  public function alterRow(&$row) {
+    if($row['aanmelding_team']=='1'){
+      $row['aanmelding_team']='Yes';
+    }  else {
+      $row['aanmelding_team']='No';
+    }
+    $status = CRM_Event_PseudoConstant::participantStatus();
+    $status_id = $row['status_id'];
+    $row['status_id'] = $status[$status_id];
+  }
+
+  /**
+   * @param $title
+   */
+  public function setTitle($title) {
+    if ($title) {
+      CRM_Utils_System::setTitle($title);
+    }
+    else {
+      CRM_Utils_System::setTitle(ts('Search'));
+    }
+  }
+
+  /**
+   * @param string $tableAlias
+   */
+  public function buildACLClause($tableAlias = 'contact') {
+    list($this->_aclFrom, $this->_aclWhere) = CRM_Contact_BAO_Contact_Permission::cacheClause($tableAlias);
+  }
+
 }
