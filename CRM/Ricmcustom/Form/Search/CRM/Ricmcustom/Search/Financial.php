@@ -4,178 +4,164 @@
  * A custom contact search
  */
 class CRM_Ricmcustom_Form_Search_CRM_Ricmcustom_Search_Financial extends CRM_Contact_Form_Search_Custom_Base implements CRM_Contact_Form_Search_Interface {
-  function __construct(&$formValues) {
+
+  protected $_query;
+
+  protected $_aclFrom = NULL;
+
+  protected $_aclWhere = NULL;
+
+  /**
+   * @param $formValues
+   */
+  /**
+   * @param $formValues
+   */
+  public function __construct(&$formValues) {
     parent::__construct($formValues);
+
+    $this->normalize();
+    $this->_columns = [
+      '' => 'contact_type',
+      ts('Name') => 'sort_name',
+      ts('Address') => 'street_address',
+      ts('City') => 'city',
+      ts('State') => 'state_province',
+      ts('Postal') => 'postal_code',
+      ts('Country') => 'country',
+      ts('Email') => 'email',
+      ts('Phone') => 'phone',
+    ];
+
+    $params = CRM_Contact_BAO_Query::convertFormValues($this->_formValues);
+    $returnProperties = [];
+    $returnProperties['contact_sub_type'] = 1;
+
+    $addressOptions = CRM_Core_BAO_Setting::valueOptions(CRM_Core_BAO_Setting::SYSTEM_PREFERENCES_NAME, 'address_options', TRUE, NULL, TRUE);
+
+    foreach ($this->_columns as $name => $field) {
+      if (in_array($field, [
+          'street_address',
+          'city',
+          'state_province',
+          'postal_code',
+          'country',
+        ]) && empty($addressOptions[$field])) {
+        unset($this->_columns[$name]);
+        continue;
+      }
+      $returnProperties[$field] = 1;
+    }
+
+    $this->_query = new CRM_Contact_BAO_Query($params, $returnProperties, NULL, FALSE, FALSE, 1, FALSE, FALSE);
   }
 
   /**
-   * Prepare a set of search fields
+   * Normalize the form values to make it look similar to the advanced form
+   * values this prevents a ton of work downstream and allows us to use the
+   * same code for multiple purposes (queries, save/edit etc)
    *
-   * @param CRM_Core_Form $form modifiable
    * @return void
    */
-  function buildForm(&$form) {
-    CRM_Utils_System::setTitle(ts('My Search Title'));
+  public function normalize() {
+    $contactType = CRM_Utils_Array::value('contact_type', $this->_formValues);
+    if ($contactType && !is_array($contactType)) {
+      unset($this->_formValues['contact_type']);
+      $this->_formValues['contact_type'][$contactType] = 1;
+    }
 
-    $form->add('text',
-      'household_name',
-      ts('Household Name'),
-      TRUE
-    );
+    $group = CRM_Utils_Array::value('group', $this->_formValues);
+    if ($group && !is_array($group)) {
+      unset($this->_formValues['group']);
+      $this->_formValues['group'][$group] = 1;
+    }
 
-    $stateProvince = array('' => ts('- any state/province -')) + CRM_Core_PseudoConstant::stateProvince();
-    $form->addElement('select', 'state_province_id', ts('State/Province'), $stateProvince);
+    $tag = CRM_Utils_Array::value('tag', $this->_formValues);
+    if ($tag && !is_array($tag)) {
+      unset($this->_formValues['tag']);
+      $this->_formValues['tag'][$tag] = 1;
+    }
 
-    // Optionally define default search values
-    $form->setDefaults(array(
-      'household_name' => '',
-      'state_province_id' => NULL,
-    ));
-
-    /**
-     * if you are using the standard template, this array tells the template what elements
-     * are part of the search criteria
-     */
-    $form->assign('elements', array('household_name', 'state_province_id'));
-  }
-
-  /**
-   * Get a list of summary data points
-   *
-   * @return mixed; NULL or array with keys:
-   *  - summary: string
-   *  - total: numeric
-   */
-  function summary() {
     return NULL;
-    // return array(
-    //   'summary' => 'This is a summary',
-    //   'total' => 50.0,
-    // );
   }
 
   /**
-   * Get a list of displayable columns
-   *
-   * @return array, keys are printable column headers and values are SQL column names
+   * @param CRM_Core_Form $form
    */
-  function &columns() {
-    // return by reference
-    $columns = array(
-      ts('Contact Id') => 'contact_id',
-      ts('Contact Type') => 'contact_type',
-      ts('Name') => 'sort_name',
-      ts('State') => 'state_province',
-    );
-    return $columns;
+  public function buildForm(&$form) {
+
+    $this->setTitle(ts('Ricm Financial Search'));
+
+    $form->add('text', 'contact_id', ts('RICM-2016 identifier'));
+    $form->add('text', 'sort_name', ts('Name'));
+
+    $form->assign('elements', ['contact_id', 'sort_name']);
   }
 
   /**
-   * Construct a full SQL query which returns one page worth of results
-   *
+   * @return CRM_Contact_DAO_Contact
+   */
+  public function count() {
+    return $this->_query->searchQuery(0, 0, NULL, TRUE);
+  }
+
+  /**
    * @param int $offset
-   * @param int $rowcount
+   * @param int $rowCount
    * @param null $sort
    * @param bool $includeContactIDs
    * @param bool $justIDs
-   * @return string, sql
+   *
+   * @return CRM_Contact_DAO_Contact
    */
-  function all($offset = 0, $rowcount = 0, $sort = NULL, $includeContactIDs = FALSE, $justIDs = FALSE) {
-    // delegate to $this->sql(), $this->select(), $this->from(), $this->where(), etc.
-    return $this->sql($this->select(), $offset, $rowcount, $sort, $includeContactIDs, NULL);
+  public function all($offset = 0, $rowCount = 0, $sort = NULL, $includeContactIDs = FALSE, $justIDs = FALSE) {
+    return $this->_query->searchQuery($offset, $rowCount, $sort, FALSE, $includeContactIDs, FALSE, $justIDs, TRUE);
   }
 
   /**
-   * Construct a SQL SELECT clause
-   *
-   * @return string, sql fragment with SELECT arguments
+   * @return string
    */
-  function select() {
-    return "
-      contact_a.id           as contact_id  ,
-      contact_a.contact_type as contact_type,
-      contact_a.sort_name    as sort_name,
-      state_province.name    as state_province
-    ";
+  public function from() {
+    $this->buildACLClause('contact_a');
+    $from = $this->_query->_fromClause;
+    $from .= "{$this->_aclFrom}";
+    return $from;
   }
 
   /**
-   * Construct a SQL FROM clause
-   *
-   * @return string, sql fragment with FROM and JOIN clauses
-   */
-  function from() {
-    return "
-      FROM      civicrm_contact contact_a
-      LEFT JOIN civicrm_address address ON ( address.contact_id       = contact_a.id AND
-                                             address.is_primary       = 1 )
-      LEFT JOIN civicrm_email           ON ( civicrm_email.contact_id = contact_a.id AND
-                                             civicrm_email.is_primary = 1 )
-      LEFT JOIN civicrm_state_province state_province ON state_province.id = address.state_province_id
-    ";
-  }
-
-  /**
-   * Construct a SQL WHERE clause
-   *
    * @param bool $includeContactIDs
-   * @return string, sql fragment with conditional expressions
+   *
+   * @return string|void
    */
-  function where($includeContactIDs = FALSE) {
-    $params = array();
-    $where = "contact_a.contact_type   = 'Household'";
-
-    $count  = 1;
-    $clause = array();
-    $name   = CRM_Utils_Array::value('household_name',
-      $this->_formValues
-    );
-    if ($name != NULL) {
-      if (strpos($name, '%') === FALSE) {
-        $name = "%{$name}%";
+  public function where($includeContactIDs = FALSE) {
+    if ($whereClause = $this->_query->whereClause()) {
+      if ($this->_aclWhere) {
+        $whereClause .= " AND {$this->_aclWhere}";
       }
-      $params[$count] = array($name, 'String');
-      $clause[] = "contact_a.household_name LIKE %{$count}";
-      $count++;
+      return $whereClause;
     }
-
-    $state = CRM_Utils_Array::value('state_province_id',
-      $this->_formValues
-    );
-    if (!$state &&
-      $this->_stateID
-    ) {
-      $state = $this->_stateID;
-    }
-
-    if ($state) {
-      $params[$count] = array($state, 'Integer');
-      $clause[] = "state_province.id = %{$count}";
-    }
-
-    if (!empty($clause)) {
-      $where .= ' AND ' . implode(' AND ', $clause);
-    }
-
-    return $this->whereClause($where, $params);
+    return ' (1) ';
   }
 
   /**
-   * Determine the Smarty template for the search screen
-   *
-   * @return string, template path (findable through Smarty template path)
+   * @return string
    */
-  function templateFile() {
+  public function templateFile() {
     return 'CRM/Contact/Form/Search/Custom.tpl';
   }
 
   /**
-   * Modify the content of each row
-   *
-   * @param array $row modifiable SQL result row
-   * @return void
+   * @return CRM_Contact_BAO_Query
    */
-  function alterRow(&$row) {
-    $row['sort_name'] .= ' ( altered )';
+  public function getQueryObj() {
+    return $this->_query;
   }
+
+  /**
+   * @param string $tableAlias
+   */
+  public function buildACLClause($tableAlias = 'contact') {
+    list($this->_aclFrom, $this->_aclWhere) = CRM_Contact_BAO_Contact_Permission::cacheClause($tableAlias);
+  }
+
 }
