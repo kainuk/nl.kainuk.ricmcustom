@@ -28,7 +28,7 @@ class CRM_Ricmcustom_Form_Search_CRM_Ricmcustom_Search_Administration extends CR
    */
   public function buildForm(&$form) {
 
-    $events = CRM_Event_BAO_Event::getEvents(1);
+    $events = CRM_Event_BAO_Event::getEvents(1,null,true,false);
     $roles  = CRM_Event_PseudoConstant::participantRole();
     $status = CRM_Event_PseudoConstant::participantStatus(null,"name in ('Registered','Awaiting approval','Partially paid','Pending refund','Pending from pay later')");
     $form->add('text', 'contact_id', ts('RICM-2019 identifier'));
