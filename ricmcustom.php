@@ -149,3 +149,40 @@ function ricmcustom_civicrm_navigationMenu(&$menu) {
   ));
   _ricmcustom_civix_navigationMenu($menu);
 } // */
+
+function ricmcustom_civicrm_tokens(&$tokens) {
+  $tokens['ricm'] = array(
+    'ricm.fee'  => 'Deelname kosten',
+    'ricm.paid' => 'Deelname reeds betaald',
+    'ricm.due'  => 'Deelname nog te betalen',
+    'ricm.roompreference' => 'Deelname kamervoorkeur',
+    'ricm.extras' => 'Deelname extras',
+    'ricm.children' => 'Deelname - kinderen',
+    'ricm.childrendetails' => 'Deelname - kinderen - details',
+    'ricm.team' => 'Deelname - aanmelding bij het team',
+    'ricm.language' => 'Deelname - taal kleine groep',
+    'ricm.diet' => 'Deelname - Dieet',
+    'ricm.remarks' => 'Deelname - opmerkingen',
+  );
+}
+
+function ricmcustom_civicrm_tokenValues(&$values, $cids, $job = NULL, $tokens = [], $context = NULL) {
+  // Date tokens
+  if (!empty($tokens['ricm'])) {
+    foreach ($cids as $cid) {
+      $tokens = new CRM_Ricmcustom_ParticipantTokens($cid);
+      return $tokens->tokenValues();
+    }
+  }
+}
+
+/*
+    CiviCrm hook, zorgt ervoor dat de event_offline_receipt email naar een
+    extra email adres wordt gestuurd.
+*/
+
+function ricmcustom_civicrm_alterMailParams(&$params, $context) {
+  if (isset($params['valueName']) && $params['valueName'] == 'event_offline_receipt') {
+    $params['bcc'] = variable_get('ricm_bcc_email', 'info@kainuk.nl');
+  }
+}

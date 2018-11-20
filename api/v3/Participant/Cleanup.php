@@ -44,7 +44,7 @@ function civicrm_api3_participant_Cleanup($params) {
 
   }
 
-  $returnValues['count'] = $count++;
+  $returnValues['count'] = $count;
   $returnValues['event_id']='eventid';
   return civicrm_api3_create_success($returnValues, $params, 'Participant', 'cleanup');
 }
