@@ -15,8 +15,8 @@ class CRM_Ricmcustom_ParticipantTokens {
    */
   public function __construct($contactId) {
     $this->participantId = CRM_Core_DAO::singleValueQuery('select id from civicrm_participant where event_id=%1 and contact_id=%2',[
-        //1 => [variable_get('ricm_event_id', '2'),'Integer'],
-        1 => [4,'Integer'],
+        1 => [variable_get('ricm_event_id', '2'),'Integer'],
+        //1 => [4,'Integer'],
         2 => [$contactId,'Integer']
       ]);
   }
