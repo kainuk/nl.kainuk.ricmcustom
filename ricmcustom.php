@@ -171,7 +171,7 @@ function ricmcustom_civicrm_tokenValues(&$values, $cids, $job = NULL, $tokens = 
   if (!empty($tokens['ricm'])) {
     foreach ($cids as $cid) {
       $tokens = new CRM_Ricmcustom_ParticipantTokens($cid);
-      return $tokens->tokenValues();
+      $values[$cid] = $tokens->tokenValues();
     }
   }
 }
