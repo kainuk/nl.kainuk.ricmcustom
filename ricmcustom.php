@@ -163,6 +163,7 @@ function ricmcustom_civicrm_tokens(&$tokens) {
     'ricm.language' => 'Deelname - taal kleine groep',
     'ricm.diet' => 'Deelname - Dieet',
     'ricm.remarks' => 'Deelname - opmerkingen',
+    'ricm.salutation' => 'Aanhef (ipv gender)'
   );
 }
 

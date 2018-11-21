@@ -7,6 +7,7 @@
 class CRM_Ricmcustom_ParticipantTokens {
 
   var $participantId;
+  var $contactId;
 
   /**
    * CRM_Ricmcustom_ParticipantTokens constructor.
@@ -19,6 +20,7 @@ class CRM_Ricmcustom_ParticipantTokens {
         //1 => [4,'Integer'],
         2 => [$contactId,'Integer']
       ]);
+    $this->contactId = $contactId;
   }
 
   private function totalPaid() {
@@ -48,7 +50,7 @@ class CRM_Ricmcustom_ParticipantTokens {
     if($dao->fetch()){
       return "{$dao->label} ({$dao->unit_price} EURO)";
     } else {
-      return false;
+      return $this->participantId;
     }
 
   }
@@ -88,6 +90,14 @@ class CRM_Ricmcustom_ParticipantTokens {
         'id' => $this->participantId,
       ]);
 
+      $team = $participant['custom_7']?'Ja':'Nee';
+
+      $contact = civicrm_api3('Contact','getsingle',[
+        'id' => $this->contactId,
+      ]);
+
+      $salutation = $contact['gender_id']==1?'Mevr.':'Dhr.';
+
       return [
         'ricm.fee' => $this->fee(),
         'ricm.paid' => $this->totalPaid(),
@@ -97,10 +107,11 @@ class CRM_Ricmcustom_ParticipantTokens {
         'ricm.extras' => $this->extras(),
         'ricm.children' => $participant['custom_9'],
         'ricm.childrendetails' => $participant['custom_10'],
-        'ricm.team' => $participant['custom_7'],
+        'ricm.team' => $team,
         'ricm.language' => $participant['custom_5'],
         'ricm.diet' => $participant['custom_6'],
         'ricm.remarks' => $participant['custom_8'],
+        'ricm.salutation' => $salutation,
       ];
     } else {
       return [
